@@ -81,7 +81,7 @@ func main() {
 
 	// MQTT Client Konfiguration aus der INI-Datei erstellen
 	brokerURL := fmt.Sprintf("tcp://%s:%s", cfg.MQTT.BrokerAddress, cfg.MQTT.Port)
-	clientID := "go-domoticz-atest-client" // Beibehalten oder aus INI lesen, falls gewünscht
+	clientID := "domoticz-pc-agent"
 	topic := "domoticz/atest"             // Beibehalten oder aus INI lesen, falls gewünscht
 
 	opts := mqtt.NewClientOptions()
@@ -103,6 +103,7 @@ func main() {
 	opts.SetPingTimeout(1 * time.Second)          // Timeout für Keep-Alive-Nachrichten
 	opts.SetAutoReconnect(true)                   // Automatisch wiederverbinden aktivieren
 	opts.SetMaxReconnectInterval(10 * time.Second) // Maximales Intervall zwischen Wiederverbindungsversuchen
+	opts.SetWill(topic, "{offline}", false)
 
 	client := mqtt.NewClient(opts)
 
@@ -112,6 +113,14 @@ func main() {
 		fmt.Printf("Fehler bei der ersten Verbindung zum MQTT-Broker: %v\n", token.Error())
 		// Wenn die erste Verbindung fehlschlägt, versuchen wir weiter zu verbinden dank SetAutoReconnect(true).
 		// systemd wird das Programm neu starten, falls es abstürzt oder die Verbindung nicht zustande kommt.
+	}
+
+	// Veröffentliche "{online}" nach erfolgreicher Verbindung
+	onlineTopic := fmt.Sprintf("%s/status", topic) // Use the existing topic as a base
+	if token := client.Publish(onlineTopic, 0, false, "{online}"); token.Wait() && token.Error() != nil {
+		fmt.Printf("Fehler beim Veröffentlichen des Online-Status auf %s: %v\n", onlineTopic, token.Error())
+	} else {
+		fmt.Printf("Erfolgreich Online-Status auf '%s' veröffentlicht.\n", onlineTopic)
 	}
 
 	// Thema abonnieren
