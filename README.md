@@ -72,6 +72,7 @@ After=network.target
 [Service]
 User=martin
 WorkingDirectory=/usr/local/bin
+ExecStartPre=/bin/sleep 5
 ExecStart=/usr/local/bin/domoticz-pc-agent
 Restart=on-failure
 RestartSec=5 # Wait 5 seconds before restarting
@@ -81,7 +82,7 @@ WantedBy=multi-user.target
 ```
 
 **Reload Systemd and Enable/Start Service:**  
-After saving the service file, run these commands:
+The `After=network.target` directive ensures the service starts only after a network connection is established.
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable domoticz-pc-agent.service
