@@ -19,7 +19,7 @@ type Config struct {
 		Password      string `ini:"password"`
 	} `ini:"mqtt"`
 	Domoticz struct {
-		Idx  string `ini:"idx"`
+		Idx  int16 `ini:"idx"`
 		Type string `ini:"type"`
 	} `ini:"domoticz"`
 }
@@ -72,8 +72,8 @@ func main() {
 	if cfg.MQTT.Username != "" {
 		fmt.Printf("MQTT User: %s\n", cfg.MQTT.Username)
 	}
-	if cfg.Domoticz.Idx != "" {
-		fmt.Printf("Domoticz Index: %s\n", cfg.Domoticz.Idx)
+	if cfg.Domoticz.Idx > 0 {
+		fmt.Printf("Domoticz Index: %d\n", cfg.Domoticz.Idx)
 	}
 	if cfg.Domoticz.Type != "" {
 		fmt.Printf("Domoticz Type: %s\n", cfg.Domoticz.Type)
@@ -83,6 +83,10 @@ func main() {
 	brokerURL := fmt.Sprintf("tcp://%s:%s", cfg.MQTT.BrokerAddress, cfg.MQTT.Port)
 	clientID := "domoticz-pc-agent"
 	topic := "domoticz" // Keep or read from INI if desired
+
+	statusTopic := fmt.Sprintf("%s/in", topic)
+	onlineMessage := fmt.Sprintf("{\"command\":\"switchlight\",\"idx\":%d,\"switchcmd\":\"On\"}", cfg.Domoticz.Idx)
+	offlineMessage := fmt.Sprintf("{\"command\":\"switchlight\",\"idx\":%d,\"switchcmd\":\"Off\"}", cfg.Domoticz.Idx)
 
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(brokerURL)
@@ -99,11 +103,11 @@ func main() {
 		}
 	}
 
-	opts.SetConnectTimeout(5 * time.Second)       // Timeout für die anfängliche Verbindung
-	opts.SetPingTimeout(1 * time.Second)          // Timeout für Keep-Alive-Nachrichten
-	opts.SetAutoReconnect(true)                   // Automatisch wiederverbinden aktivieren
-	opts.SetMaxReconnectInterval(10 * time.Second) // Maximales Intervall zwischen Wiederverbindungsversuchen
-	opts.SetWill(topic, "{offline}", false)
+	opts.SetConnectTimeout(5 * time.Second)       // Timeout for initial connection
+	opts.SetPingTimeout(1 * time.Second)          // Timeout for keep-alive messages
+	opts.SetAutoReconnect(true)                   // Enable automatic reconnection
+	opts.SetMaxReconnectInterval(10 * time.Second) // Maximum interval between reconnection attempts
+	opts.SetWill("domoticz/will", "offlineMessage", opts.WillQos, false)
 
 	client := mqtt.NewClient(opts)
 
@@ -140,10 +144,13 @@ func main() {
 	<-sigChan
 	fmt.Println("Shutting down MQTT client...")
 
-	// Verbindung sauber trennen
-	client.Disconnect(250) // 250ms Timeout zum Senden ausstehender Nachrichten
-	fmt.Println("Client getrennt.")
-	os.Exit(0) // Programm sauber beenden
+	// Publish "offline" after successful connection
+	if token := client.Publish(statusTopic, 0, false, offlineMessage); token.Wait() && token.Error() != nil {
+		fmt.Printf("Error publishing offline status to %s: %v\n", offlineMessage, token.Error())
+	} else {
+		fmt.Printf("Successfully published offline status to '%s'\n", statusTopic)
+	}
+
 	// Disconnect cleanly
 	client.Disconnect(250) // 250ms timeout to send pending messages
 	fmt.Println("Client disconnected.")
