@@ -6,93 +6,94 @@ This repository contains a Go program designed to connect to an MQTT broker, sub
 
 ### Configuration
 
-The MQTT client's behavior is controlled by a configuration file named `domoticz-pc-agent.ini`. This file should be placed in the same directory as the executable (`/home/martin/Coding/go-domoticz-pc-agent/`).
+The MQTT client's behavior is controlled by a configuration file named `domoticz-pc-agent.ini`. This file should be placed in the same directory as the executable.
 
 **File:** `domoticz-pc-agent.ini`
 
 ```ini
 [mqtt]
-broker_address = 192.168.178.250
+; Broker address/port
+broker_address = 192.168.x.y
 port = 1883
-# username = your_mqtt_username  ; Uncomment and fill if your broker requires authentication
-# password = your_mqtt_password  ; Uncomment and fill if your broker requires authentication
+; Username/Password (Uncomment and fill if your broker requires authentication)
+;username = your_mqtt_username
+;password = your_mqtt_password
 
 [domoticz]
-idx = 123 ; Example Domoticz device index (replace with your actual value)
-type = Device ; Example Domoticz device type (replace with your actual value)
+; Domoticz device id (replace with your actual value)
+idx = 111
+; Domoticz type (Switch or Sensor)
+type = Switch
 ```
-
-**Settings:**
-*   **`[mqtt]` Section:**
-    *   `broker_address`: The IP address or hostname of your MQTT broker.
-    *   `port`: The port your MQTT broker is listening on (e.g., `1883` for unencrypted, `8883` for TLS).
-    *   `username`: (Optional) Your MQTT username. Uncomment and set if required.
-    *   `password`: (Optional) Your MQTT password. Uncomment and set if required.
-*   **`[domoticz]` Section:**
-    *   `idx`: The Domoticz device index.
-    *   `type`: The Domoticz device type.
 
 ### Installation & Build
 
-1.  **Get the Go code:**
-    Ensure you have the Go toolchain installed. Navigate to your project directory (`/home/martin/Coding/go-domoticz-pc-agent/`) in your terminal.
-    Save the Go program code into `main.go` as provided in the setup instructions.
+**Get the Go code:**  
+Ensure you have the Go toolchain installed.  
+TODO git command
 
-2.  **Install Dependencies:**
-    Install the necessary MQTT client library:
-    ```bash
-    go get github.com/eclipse/paho.mqtt.golang
-    go get gopkg.in/ini.v1
-    ```
+**Install Dependencies:**  
+Install the necessary MQTT client library:  
+```bash
+go get github.com/eclipse/paho.mqtt.golang
+go get gopkg.in/ini.v1
+```
 
-3.  **Build the Executable:**
-    Compile the Go program:
-    ```bash
-    go build -o mqtt-client main.go
-    ```
-    This will create an executable file named `mqtt-client` in the current directory.
+**Build the Executable:**  
+Compile the Go program:
+```bash
+./build.sh
+```
+ This will create an executable file named `domoticz-pc-agent` in the current ./bin/ directory.
 
 ### Systemd Service Setup (for Linux)
 
 To run the MQTT client automatically in the background on system startup, you can use `systemd`.
 
-1.  **Create Service File:**
-    Create a new file named `mqtt-client.service` in `/etc/systemd/system/` (you'll need `sudo` privileges).
-    ```bash
-    sudo nano /etc/systemd/system/mqtt-client.service
-    ```
-    Paste the following content into the file, **replacing `martin` with your actual username if it's different**:
+**Copy binary and create config:**  
+Copy/create needed files in `/usr/local/bin/` (you'll need `sudo` privileges).
+```bash
+sudo cp ./bin/domoticz-pc-agent /usr/local/bin/
+sudo nano /usr/local/bin/domoticz-pc-agent.ini
+```
 
-    ```ini
-    [Unit]
-    Description=Go MQTT Client for Domoticz
-    After=network.target
+**Create Service File:**  
+Create a new file named `domoticz-pc-agent.service` in `/etc/systemd/system/` (you'll need `sudo` privileges).
+```bash
+sudo nano /etc/systemd/system/domoticz-pc-agent.service
+```
+Paste the following content into the file, **replacing `martin` with your actual username if it's different**:
 
-    [Service]
-    User=martin
-    WorkingDirectory=/home/martin/Coding/go-domoticz-pc-agent
-    ExecStart=/home/martin/Coding/go-domoticz-pc-agent/mqtt-client
-    Restart=on-failure
-    RestartSec=5 # Wait 5 seconds before restarting
+```ini
+[Unit]
+Description=Go MQTT Client for Domoticz
+After=network.target
 
-    [Install]
-    WantedBy=multi-user.target
-    ```
+[Service]
+User=martin
+WorkingDirectory=/usr/local/bin
+ExecStart=/usr/local/bin/domoticz-pc-agent
+Restart=on-failure
+RestartSec=5 # Wait 5 seconds before restarting
 
-2.  **Reload Systemd and Enable/Start Service:**
-    After saving the service file, run these commands:
-    ```bash
-    sudo systemctl daemon-reload
-    sudo systemctl enable mqtt-client.service
-    sudo systemctl start mqtt-client.service
-    ```
+[Install]
+WantedBy=multi-user.target
+```
 
-3.  **Check Status:**
-    You can verify the service status and view logs:
-    ```bash
-    sudo systemctl status mqtt-client.service
-    journalctl -u mqtt-client.service -f # Press Ctrl+C to exit
-    ```
+**Reload Systemd and Enable/Start Service:**  
+After saving the service file, run these commands:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable domoticz-pc-agent.service
+sudo systemctl start domoticz-pc-agent.service
+```
+
+**Check Status:**  
+You can verify the service status and view logs:
+```bash
+sudo systemctl status domoticz-pc-agent.service
+journalctl -u domoticz-pc-agent.service -f # Press Ctrl+C to exit
+```
 
 ## Example Usage (MQTT Commands)
 
