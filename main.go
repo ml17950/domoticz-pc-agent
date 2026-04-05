@@ -24,74 +24,74 @@ type Config struct {
 	} `ini:"domoticz"`
 }
 
-// connectHandler wird aufgerufen, wenn die Verbindung zum MQTT-Broker erfolgreich ist.
+// connectHandler is called when the connection to the MQTT broker is successful.
 var connectHandler mqtt.OnConnectHandler = func(client mqtt.Client) {
-	fmt.Println("Erfolgreich mit dem MQTT-Broker verbunden!")
+	fmt.Println("Successfully connected to the MQTT broker!")
 }
 
-// connectLostHandler wird aufgerufen, wenn die Verbindung zum MQTT-Broker unerwartet verloren geht.
+// connectLostHandler is called when the connection to the MQTT broker is unexpectedly lost.
 var connectLostHandler mqtt.ConnectionLostHandler = func(client mqtt.Client, err error) {
-	fmt.Printf("Verbindung verloren: %v\n", err)
-	// systemd wird das Programm neu starten, falls es abstürzt.
+	fmt.Printf("Connection lost: %v\n", err)
+	// systemd will restart the program if it crashes.
 }
 
-// messageHandler wird aufgerufen, wenn eine Nachricht auf einem abonnierten Thema empfangen wird.
+// messageHandler is called when a message is received on a subscribed topic.
 var messageHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
-	fmt.Printf("Nachricht empfangen auf Thema: %s\n", msg.Topic())
+	fmt.Printf("Message received on topic: %s\n", msg.Topic())
 	fmt.Printf("Payload: %s\n", msg.Payload())
-	// Hier könnten Sie weitere Logik hinzufügen, z.B. die Nachricht an Domoticz weiterleiten
-	// basierend auf den aus der INI-Datei gelesenen Idx und Type.
+	// You could add more logic here, e.g., forwarding the message to Domoticz
+	// based on the Idx and Type read from the INI file.
 }
 
 func main() {
-	// Konfigurationsdatei laden
+	// Load configuration file
 	cfgFile := "domoticz-pc-agent.ini"
 
-	// 1. Lade die INI-Datei in ein ini.File Objekt
+	// 1. Load the INI file into an ini.File object
 	file, err := ini.Load(cfgFile)
 	if err != nil {
-		fmt.Printf("Fehler beim Laden der Konfigurationsdatei '%s': %v\n", cfgFile, err)
+		fmt.Printf("Error loading configuration file '%s': %v\n", cfgFile, err)
 		os.Exit(1)
 	}
 
-	// 2. Mappe die geladenen Konfiguration auf die Config-Struktur
+	// 2. Map the loaded configuration to the struct
 	var cfg Config
 	err = file.MapTo(&cfg)
 	if err != nil {
-		fmt.Printf("Fehler beim Mappen der Konfiguration auf die Struktur: %v\n", err)
+		fmt.Printf("Error mapping configuration to struct: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Überprüfen, ob essenzielle Konfiguration vorhanden ist
+	// Check if essential configuration is present
 	if cfg.MQTT.BrokerAddress == "" || cfg.MQTT.Port == "" {
-		fmt.Println("Fehler: MQTT Broker-Adresse und Port müssen in der INI-Datei gesetzt sein.")
+		fmt.Println("Error: MQTT Broker address and port must be set in the INI file.")
 		os.Exit(1)
 	}
-	// Ausgabe der gelesenen Konfiguration (optional, zur Fehlersuche)
+	// Output of the read configuration (optional, for debugging)
 	fmt.Printf("MQTT Broker: %s:%s\n", cfg.MQTT.BrokerAddress, cfg.MQTT.Port)
 	if cfg.MQTT.Username != "" {
-		fmt.Printf("MQTT Benutzer: %s\n", cfg.MQTT.Username)
+		fmt.Printf("MQTT User: %s\n", cfg.MQTT.Username)
 	}
 	if cfg.Domoticz.Idx != "" {
 		fmt.Printf("Domoticz Index: %s\n", cfg.Domoticz.Idx)
 	}
 	if cfg.Domoticz.Type != "" {
-		fmt.Printf("Domoticz Typ: %s\n", cfg.Domoticz.Type)
+		fmt.Printf("Domoticz Type: %s\n", cfg.Domoticz.Type)
 	}
 
-	// MQTT Client Konfiguration aus der INI-Datei erstellen
+	// Create MQTT client configuration from INI file
 	brokerURL := fmt.Sprintf("tcp://%s:%s", cfg.MQTT.BrokerAddress, cfg.MQTT.Port)
 	clientID := "domoticz-pc-agent"
-	topic := "domoticz/atest"             // Beibehalten oder aus INI lesen, falls gewünscht
+	topic := "domoticz" // Keep or read from INI if desired
 
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(brokerURL)
 	opts.SetClientID(clientID)
-	opts.SetDefaultPublishHandler(messageHandler) // Nachrichten für Abonnements verarbeiten
+	opts.SetDefaultPublishHandler(messageHandler) // Process messages for subscriptions
 	opts.OnConnect = connectHandler
 	opts.OnConnectionLost = connectLostHandler
 
-	// Nur Username und Passwort setzen, wenn sie in der INI-Datei vorhanden sind
+	// Only set username and password if they are present in the INI file
 	if cfg.MQTT.Username != "" {
 		opts.SetUsername(cfg.MQTT.Username)
 		if cfg.MQTT.Password != "" {
@@ -107,42 +107,45 @@ func main() {
 
 	client := mqtt.NewClient(opts)
 
-	// Verbindung zum Broker herstellen
-	fmt.Println("Versuche, eine Verbindung zum MQTT-Broker herzustellen...")
+	// Establish connection to the broker
+	fmt.Println("Attempting to connect to the MQTT broker...")
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
-		fmt.Printf("Fehler bei der ersten Verbindung zum MQTT-Broker: %v\n", token.Error())
-		// Wenn die erste Verbindung fehlschlägt, versuchen wir weiter zu verbinden dank SetAutoReconnect(true).
-		// systemd wird das Programm neu starten, falls es abstürzt oder die Verbindung nicht zustande kommt.
+		fmt.Printf("Error on first connection to MQTT broker: %v\n", token.Error())
+		// If the first connection fails, we will keep trying to connect thanks to SetAutoReconnect(true).
+		// systemd will restart the program if it crashes or fails to connect.
 	}
 
-	// Veröffentliche "{online}" nach erfolgreicher Verbindung
-	onlineTopic := fmt.Sprintf("%s/status", topic) // Use the existing topic as a base
-	if token := client.Publish(onlineTopic, 0, false, "{online}"); token.Wait() && token.Error() != nil {
-		fmt.Printf("Fehler beim Veröffentlichen des Online-Status auf %s: %v\n", onlineTopic, token.Error())
+	// Publish "online" after successful connection
+	if token := client.Publish(statusTopic, 0, false, onlineMessage); token.Wait() && token.Error() != nil {
+		fmt.Printf("Error publishing online status to %s: %v\n", onlineMessage, token.Error())
 	} else {
-		fmt.Printf("Erfolgreich Online-Status auf '%s' veröffentlicht.\n", onlineTopic)
+		fmt.Printf("Successfully published online status to '%s'\n", statusTopic)
 	}
 
-	// Thema abonnieren
+	// Subscribe to topic
 	if token := client.Subscribe(topic, 0, messageHandler); token.Wait() && token.Error() != nil {
-		fmt.Printf("Fehler beim Abonnieren des Themas %s: %v\n", topic, token.Error())
-		// Wenn das Abonnieren fehlschlägt, trennen wir die Verbindung und beben das Programm
+		fmt.Printf("Error subscribing to topic %s: %v\n", topic, token.Error())
+		// If subscription fails, disconnect and exit the program
 		client.Disconnect(250)
 		os.Exit(1)
 	}
-	fmt.Printf("Erfolgreich zum Thema '%s' abonniert.\n", topic)
+	fmt.Printf("Successfully subscribed to topic '%s'\n", topic)
 
-	// Das Programm am Laufen halten und auf Signale warten
-	// Wir verwenden einen Channel, um auf Betriebssystem-Signale zu warten (z.B. SIGINT für Strg+C, SIGTERM für systemd)
+	// Keep the program running and wait for signals
+	// We use a channel to wait for OS signals (e.g., SIGINT for Ctrl+C, SIGTERM for systemd)
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// Warten, bis ein Signal empfangen wird
+	// Wait until a signal is received
 	<-sigChan
-	fmt.Println("Herunterfahren des MQTT-Clients...")
+	fmt.Println("Shutting down MQTT client...")
 
 	// Verbindung sauber trennen
 	client.Disconnect(250) // 250ms Timeout zum Senden ausstehender Nachrichten
 	fmt.Println("Client getrennt.")
 	os.Exit(0) // Programm sauber beenden
+	// Disconnect cleanly
+	client.Disconnect(250) // 250ms timeout to send pending messages
+	fmt.Println("Client disconnected.")
+	os.Exit(0) // Exit program cleanly
 }
